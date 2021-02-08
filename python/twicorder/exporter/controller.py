@@ -48,10 +48,12 @@ class Exporter:
     def __init__(self, raw_data_path: Path, database: str,
                  export_type: Type = Type.Tweet,
                  autostart: bool = False, new_only: bool = False,
-                 filter_file: Optional[Path] = None):
+                 filter_file: Optional[Path] = None,
+                 primary_only: bool = False):
         self._export_type = export_type
         self._new_only = new_only
         self._filter_file = filter_file
+        self._primary_only = primary_only
         self._db_date = 0.0
         engine = create_engine(database)
         create_tables(engine)
@@ -198,6 +200,9 @@ class Exporter:
 
     def register_tweet(self, tweet_obj, raw_file, line, primary=True):
         tweet_id = tweet_obj['id']
+
+        if self._primary_only and not primary:
+            return
 
         # Skip duplicates
         ret = None
@@ -599,7 +604,16 @@ def users(ctx: click.Context):
     default=None,
     help='File with line separated top folder names to search'
 )
-def tweets(ctx: click.Context, filter_file: Optional[str]):
+@click.option(
+    '--primary-only',
+    default=False,
+    is_flag=True,
+    help=(
+        'Only export tweets that were captured directly. Skip tweets nested in '
+        'mentions, retweets and similar.'
+    )
+)
+def tweets(ctx: click.Context, filter_file: Optional[str], primary_only: bool):
     """
     Tweet exporter
     """
@@ -617,7 +631,8 @@ def tweets(ctx: click.Context, filter_file: Optional[str]):
         export_type=Exporter.Type.Tweet,
         autostart=True,
         new_only=ctx.obj['new_only'],
-        filter_file=Path(filter_file) if filter_file else None
+        filter_file=Path(filter_file) if filter_file else None,
+        primary_only=primary_only,
     )
 
 
