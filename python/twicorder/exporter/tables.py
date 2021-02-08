@@ -54,9 +54,11 @@ class Tweet(Base):
     url_count = Column(Integer, default=0)
     media_count = Column(Integer, default=0)
 
-    retweet_status_id = Column(BigInteger, ForeignKey('tweets.tweet_id'))
+    # retweet_status_id = Column(BigInteger, ForeignKey('tweets.tweet_id'))
+    retweet_status_id = Column(BigInteger)
     is_quote_status = Column(Boolean)
-    quoted_status_id = Column(BigInteger, ForeignKey('tweets.tweet_id'))
+    # quoted_status_id = Column(BigInteger, ForeignKey('tweets.tweet_id'))
+    quoted_status_id = Column(BigInteger)
 
     mention_count = Column(SmallInteger)
     retweet_count = Column(Integer)
