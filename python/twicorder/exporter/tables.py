@@ -28,6 +28,7 @@ SmallInteger: 16bit
 class Tweet(Base):
 
     __tablename__ = 'tweets'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary Key
     tweet_id = Column(BigInteger, primary_key=True, index=True)
@@ -93,6 +94,7 @@ class Tweet(Base):
 class User(Base):
 
     __tablename__ = 'users'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary key
     unique_id = Column(Integer, primary_key=True, index=True)
@@ -128,6 +130,7 @@ class User(Base):
 class Mention(Base):
 
     __tablename__ = 'mentions'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary key
     mention_id = Column(Integer, primary_key=True)
@@ -155,6 +158,7 @@ class Mention(Base):
 class Hashtag(Base):
 
     __tablename__ = 'hashtags'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary key
     hashtag_id = Column(Integer, primary_key=True)
@@ -172,6 +176,7 @@ class Hashtag(Base):
 class Symbol(Base):
 
     __tablename__ = 'symbols'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary key
     symbol_id = Column(Integer, primary_key=True)
@@ -189,6 +194,7 @@ class Symbol(Base):
 class Media(Base):
 
     __tablename__ = 'media'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary key
     unique_id = Column(Integer, primary_key=True)
@@ -211,6 +217,7 @@ class Media(Base):
 class Url(Base):
 
     __tablename__ = 'urls'
+    # __table_args__ = {'prefixes': ['UNLOGGED']}
 
     # Primary key
     url_id = Column(Integer, primary_key=True)

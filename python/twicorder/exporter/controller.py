@@ -9,12 +9,13 @@ import unicodedata
 import click
 
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from statistics import mean
 
-from sqlalchemy import create_engine, exists
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from tqdm import tqdm
@@ -37,6 +38,18 @@ from twicorder.exporter.tables import (
     User,
 )
 from twicorder.utils import readlines, str_to_date
+
+
+@dataclass
+class Batch:
+
+    tweets: List[Tweet]
+    users: List[User]
+    mentions: List[Mention]
+    hashtags: List[Hashtag]
+    symbols: List[Symbol]
+    media: [Media]
+    urls: List[Url]
 
 
 class Exporter:
@@ -68,6 +81,7 @@ class Exporter:
         }
         self._tweet_id_buffer = set()
         self._raw_data_path = raw_data_path
+        self._batch = None
 
         if autostart:
             self.start()
@@ -87,6 +101,36 @@ class Exporter:
 
         """
         return self._tweet_id_buffer
+
+    def new_batch(self) -> Batch:
+        """
+        Flush the old batch and create a new one.
+
+        Returns:
+            New batch
+
+        """
+        self._batch = Batch(
+            tweets=[],
+            users=[],
+            mentions=[],
+            hashtags=[],
+            symbols=[],
+            media=[],
+            urls=[]
+        )
+        return self._batch
+
+    @property
+    def batch(self):
+        """
+        Current batch.
+
+        Returns:
+            Current batch
+
+        """
+        return self._batch
 
     def _collect_file_paths(self) -> List[Path]:
         """
@@ -205,13 +249,7 @@ class Exporter:
             return
 
         # Skip duplicates
-        ret = None
-        try:
-            (ret,), = self.session.query(exists().where(Tweet.tweet_id == tweet_id))
-        except Exception:
-            click.echo(f'Error ingesting {raw_file}:{line}', err=True)
-            raise
-        if ret or tweet_id in self.tweet_id_buffer:
+        if tweet_id in self.tweet_id_buffer:
             self.stats['skipped_tweets'] += 1
             return
 
@@ -353,7 +391,7 @@ class Exporter:
             raw_file=raw_file_str,
         )
         self.session.add(tweet)
-        self.tweet_id_buffer.add(tweet_id)
+        self.batch.tweets.append(tweet)
         self.stats['exported_tweets'] += 1
         return tweet
 
@@ -384,7 +422,7 @@ class Exporter:
             withheld_in_countries=','.join(user_obj.get('withheld_in_countries', ())),
             tweet_id=tweet_id
         )
-        self.session.add(user)
+        self.batch.users.append(user)
         self.stats['exported_users'] += 1
         return user
 
@@ -397,7 +435,7 @@ class Exporter:
             display_end=end,
             tweet_id=tweet_id
         )
-        self.session.add(hashtag)
+        self.batch.hashtags.append(hashtag)
         return hashtag
 
     def register_symbol(self, symbol_obj, tweet_id):
@@ -408,7 +446,7 @@ class Exporter:
             display_end=end,
             tweet_id=tweet_id
         )
-        self.session.add(symbol)
+        self.batch.symbols.append(symbol)
         return symbol
 
     def register_mention(self, mention_obj, tweet_id, endpoint, author=None,
@@ -432,7 +470,7 @@ class Exporter:
             name=mention_obj['name'],
             screen_name=mention_obj['screen_name']
         )
-        self.session.add(mention)
+        self.batch.mentions.append(mention)
         return mention
 
     def register_media(self, media_obj, tweet_id):
@@ -448,7 +486,7 @@ class Exporter:
             source_status_id=media_obj.get('source_status_id'),
             tweet_id=tweet_id
         )
-        self.session.add(media)
+        self.batch.media.append(media)
         return media
 
     def register_url(self, url_obj, tweet_id):
@@ -460,20 +498,46 @@ class Exporter:
             display_end=end,
             tweet_id=tweet_id
         )
-        self.session.add(url)
+        self.batch.urls.append(url)
         return url
 
     def _get_ingested_files(self):
         counter = Counter()
         raw_files = [r[0] for r in self.session.query(Tweet.raw_file).all()]
-        for data in raw_files:
-            file, line = data.split(':')
+        for row in raw_files:
+            file, line = row.split(':')
             counter[file] = max(counter[file], int(line))
         return dict(counter.most_common())
 
+    def save_batch(self):
+        """
+        Bulk save all all batch data to database.
+        """
+        self.session.add_all(self.batch.urls)
+        self.session.add_all(self.batch.media)
+        self.session.add_all(self.batch.hashtags)
+        self.session.add_all(self.batch.symbols)
+        self.session.add_all(self.batch.users)
+        self.session.add_all(self.batch.mentions)
+        self.session.add_all(self.batch.tweets)
+
     def start(self):
-        ingested_files = self._get_ingested_files()
+        click.echo(' Starting Export '.center(80, '=') + '\n')
+        try:
+            tweet_ids = [t[0] for t in self.session.query(Tweet.tweet_id).all()]
+        except Exception:
+            click.echo('Unable to get existing tweet IDs from database.', err=True)
+            raise
+        else:
+            self._tweet_id_buffer.update(tweet_ids)
+        click.echo(f'Loaded {len(self._tweet_id_buffer)} tweet IDs from database')
+
         file_paths = self._collect_file_paths()
+        click.echo(f'Found {len(file_paths)} files to ingest')
+
+        ingested_files = self._get_ingested_files()
+        click.echo(f'Already ingested {len(ingested_files)} files')
+
         t0 = datetime.now()
         click.echo('')
         progress_iter = tqdm(
@@ -482,7 +546,7 @@ class Exporter:
             unit='files', ncols=120
         )
         for file_path in progress_iter:
-            self.tweet_id_buffer.clear()
+            self.new_batch()
             raw_file = file_path.relative_to(self.root_path)
             try:
                 lines = readlines(file_path)
@@ -505,20 +569,20 @@ class Exporter:
                     # Don't bother with delete messages
                     continue
                 if self._export_type == Exporter.Type.Tweet:
-                    tweet = self.register_tweet(data, raw_file, idx + 1)
+                    self.register_tweet(data, raw_file, idx + 1)
                 elif self._export_type == Exporter.Type.User:
-                    user = self.register_user(
+                    self.register_user(
                         user_obj=data,
                         tweet_id=None,
                         endpoint='ul',
                         capture_date=mtime
                     )
 
+            # self.save_batch()
             try:
                 self.session.commit()
             except Exception:
                 self.session.rollback()
-                raise
 
         self.session.close()
 
