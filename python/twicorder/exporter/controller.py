@@ -252,6 +252,7 @@ class Exporter:
         if tweet_id in self.tweet_id_buffer:
             self.stats['skipped_tweets'] += 1
             return
+        self._tweet_id_buffer.add(tweet_id)
 
         hashtags = []
         urls = []
@@ -390,7 +391,6 @@ class Exporter:
             withheld_in_countries_str=withheld_in_countries_str,
             raw_file=raw_file_str,
         )
-        self.session.add(tweet)
         self.batch.tweets.append(tweet)
         self.stats['exported_tweets'] += 1
         return tweet
@@ -513,13 +513,18 @@ class Exporter:
         """
         Bulk save all all batch data to database.
         """
-        self.session.add_all(self.batch.urls)
-        self.session.add_all(self.batch.media)
-        self.session.add_all(self.batch.hashtags)
-        self.session.add_all(self.batch.symbols)
-        self.session.add_all(self.batch.users)
-        self.session.add_all(self.batch.mentions)
-        self.session.add_all(self.batch.tweets)
+        self.session.bulk_save_objects(self.batch.urls)
+        self.session.bulk_save_objects(self.batch.media)
+        self.session.bulk_save_objects(self.batch.hashtags)
+        self.session.bulk_save_objects(self.batch.symbols)
+        self.session.bulk_save_objects(self.batch.users)
+        self.session.bulk_save_objects(self.batch.mentions)
+        self.session.bulk_save_objects(self.batch.tweets)
+
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
 
     def start(self):
         click.echo(' Starting Export '.center(80, '=') + '\n')
@@ -578,11 +583,7 @@ class Exporter:
                         capture_date=mtime
                     )
 
-            # self.save_batch()
-            try:
-                self.session.commit()
-            except Exception:
-                self.session.rollback()
+            self.save_batch()
 
         self.session.close()
 
