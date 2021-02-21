@@ -68,7 +68,7 @@ class Exporter:
         self._filter_file = filter_file
         self._primary_only = primary_only
         self._db_date = 0.0
-        engine = create_engine(database)
+        engine = create_engine(database, pool_pre_ping=True)
         create_tables(engine)
         Base.metadata.bind = engine
         DBSession = sessionmaker(bind=engine)
