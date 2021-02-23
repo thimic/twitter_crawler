@@ -528,6 +528,10 @@ class Exporter:
 
     def start(self):
         click.echo(' Starting Export '.center(80, '=') + '\n')
+
+        file_paths = self._collect_file_paths()
+        click.echo(f'Found {len(file_paths)} files to ingest')
+
         try:
             tweet_ids = [t[0] for t in self.session.query(Tweet.tweet_id).all()]
         except Exception:
@@ -536,9 +540,6 @@ class Exporter:
         else:
             self._tweet_id_buffer.update(tweet_ids)
         click.echo(f'Loaded {len(self._tweet_id_buffer)} tweet IDs from database')
-
-        file_paths = self._collect_file_paths()
-        click.echo(f'Found {len(file_paths)} files to ingest')
 
         ingested_files = self._get_ingested_files()
         click.echo(f'Already ingested {len(ingested_files)} files')
