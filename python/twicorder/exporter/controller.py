@@ -514,12 +514,12 @@ class Exporter:
         Bulk save all all batch data to database.
         """
         self.session.bulk_save_objects(self.batch.urls)
-        self.session.bulk_save_objects(self.batch.media)
-        self.session.bulk_save_objects(self.batch.hashtags)
-        self.session.bulk_save_objects(self.batch.symbols)
-        self.session.bulk_save_objects(self.batch.users)
-        self.session.bulk_save_objects(self.batch.mentions)
-        self.session.bulk_save_objects(self.batch.tweets)
+        self.session.add_all(self.batch.media)
+        self.session.add_all(self.batch.hashtags)
+        self.session.add_all(self.batch.symbols)
+        self.session.add_all(self.batch.users)
+        self.session.add_all(self.batch.mentions)
+        self.session.add_all(self.batch.tweets)
 
         try:
             self.session.commit()
